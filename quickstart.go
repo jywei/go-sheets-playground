@@ -3,12 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
+
+	"golang.org/x/oauth2/google"
+	sheets "google.golang.org/api/sheets/v4"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -85,4 +89,45 @@ func saveToken(file string, token *oauth2.Token) {
 	}
 	defer f.Close()
 	json.NewEncoder(f).Encode(token)
+}
+
+func main() {
+	ctx := context.Background()
+
+	b, err := ioutil.ReadFile("client_secret.json")
+	if err != nil {
+		log.Fatalf("Unable to read client secret file: %v", err)
+	}
+
+	// If modifying these scopes, delete your previously saved credentials
+	// at ~/.credentials/sheets.googleapis.com-go-quickstart.json
+	config, err := google.ConfigFromJSON(b, "https://www.googleapis.com/auth/spreadsheets.readonly")
+	if err != nil {
+		log.Fatalf("Unable to parse client secret file to config: %v", err)
+	}
+	client := getClient(ctx, config)
+
+	srv, err := sheets.New(client)
+	if err != nil {
+		log.Fatalf("Unable to retrieve Sheets client %v", err)
+	}
+
+	// Prints the names and majors of students in a sample spreadsheet:
+	// https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+	spreadsheetID := "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+	readRange := "Class Data!A2:E"
+	resp, err := srv.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve data from sheet. %v", err)
+	}
+
+	if len(resp.Values) > 0 {
+		fmt.Println("Name, Major:")
+		for _, row := range resp.Values {
+			// Print columns A and E, which correspond to indices 0 and 4.
+			fmt.Printf("%s, %s\n", row[0], row[4])
+		}
+	} else {
+		fmt.Print("No data found.")
+	}
 }
